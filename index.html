@@ -1,0 +1,82 @@
+﻿<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ローグライクビンゴ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=RocknRoll+One&family=Zen+Maru+Gothic:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="bg-shape bg-shape-a" aria-hidden="true"></div>
+    <div class="bg-shape bg-shape-b" aria-hidden="true"></div>
+
+    <main class="app">
+      <header class="app-header">
+        <h1>ローグライクビンゴ</h1>
+        <p class="subtitle">早上がりではなくハイスコアを狙うビンゴ</p>
+      </header>
+
+      <section class="status-panel" aria-label="ゲーム状況">
+        <div class="status-card">
+          <span class="label">残り回数</span>
+          <strong id="turns">0</strong>
+        </div>
+        <div class="status-card">
+          <span class="label">スコア</span>
+          <strong id="score">0</strong>
+        </div>
+        <div class="status-card">
+          <span class="label">ランク</span>
+          <strong id="rank">E</strong>
+        </div>
+        <div class="status-card">
+          <span class="label">現在の出目</span>
+          <strong id="roll">-</strong>
+        </div>
+      </section>
+
+      <section class="game-panel">
+        <div id="board" class="board" aria-label="ビンゴ盤面"></div>
+
+        <div class="controls">
+          <button id="draw-btn" class="primary-btn" type="button">数字を回す</button>
+          <button id="restart-btn" class="ghost-btn" type="button">リスタート</button>
+        </div>
+      </section>
+
+      <section class="perks-panel" aria-label="取得済みパーク">
+        <h2>取得済みパーク</h2>
+        <div id="active-perks" class="perk-list"></div>
+      </section>
+
+      <section class="log-panel" aria-label="ログ">
+        <h2>ログ</h2>
+        <ul id="log-list"></ul>
+      </section>
+
+      <section id="result" class="result-panel hidden" aria-live="polite">
+        <h2>結果</h2>
+        <p id="result-score"></p>
+        <p id="result-rank"></p>
+        <p id="result-lines"></p>
+        <a id="share-link" class="primary-btn share-link" href="#" target="_blank" rel="noopener noreferrer">Xに共有</a>
+      </section>
+    </main>
+
+    <section id="perk-modal" class="modal hidden" aria-modal="true" role="dialog" aria-labelledby="perk-title">
+      <div class="modal-card">
+        <h2 id="perk-title">パークを選択</h2>
+        <p>5回ごとの報酬です。3つの中から1つ選んでください。</p>
+        <div id="perk-options" class="perk-options"></div>
+      </div>
+    </section>
+
+    <script src="script.js"></script>
+  </body>
+</html>

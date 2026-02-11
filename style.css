@@ -137,7 +137,7 @@ h1 {
   display: grid;
   place-items: center;
   font-weight: 700;
-  font-size: 1.02rem;
+  font-size: 0.95rem;
   transition: transform 0.25s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -149,6 +149,11 @@ h1 {
 .cell.bingo {
   background: var(--bingo);
   box-shadow: inset 0 0 0 2px rgba(224, 126, 27, 0.6);
+}
+
+.cell.expanded {
+  border-style: dashed;
+  background: #fff3de;
 }
 
 .controls {
@@ -289,6 +294,54 @@ button,
   display: none;
 }
 
+.draw-window {
+  position: fixed;
+  inset: auto 10px 10px auto;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.draw-window-card {
+  width: min(240px, calc(100vw - 20px));
+  background: rgba(255, 252, 244, 0.96);
+  border: 2px solid #f0ba66;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
+  animation: drawPop 0.22s ease;
+}
+
+.draw-window-title {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #4a6475;
+}
+
+#draw-window-number {
+  display: block;
+  font-size: 1.7rem;
+  line-height: 1.2;
+  margin: 4px 0;
+}
+
+#draw-window-trace {
+  margin: 0;
+  white-space: pre-line;
+  font-size: 0.76rem;
+  color: #405766;
+}
+
+@keyframes drawPop {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 @keyframes floatA {
   0%,
   100% {
@@ -315,6 +368,6 @@ button,
   }
 
   .status-panel {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }

@@ -1,56 +1,65 @@
 ﻿const CONFIG = {
-  boardSize: 5,
-  minNumber: 1,
-  maxNumber: 75,
+  initialBoardSize: 5,
+  minBoardSize: 3,
+  maxBoardSize: 8,
   initialTurns: 20,
   perkInterval: 5,
   turnBonusPerLine: 2,
-  maxLogEntries: 14,
+  maxLogEntries: 16,
+  initialNumberMax: 75,
+  numberRangeExpand: 15,
+  drawSpinMs: 820,
+  drawRevealMs: 760,
 };
 
 const PERKS = [
   {
     id: "column_up",
     name: "列増加",
-    description: "出目が +1 されます（重複で強化）。",
+    description: "盤面を1段階拡張し、抽選範囲を拡大します。",
   },
   {
     id: "column_down",
     name: "列減少",
-    description: "出目が -1 されます（重複で強化）。",
+    description: "盤面を1段階縮小し、抽選範囲を拡大します。",
   },
   {
     id: "no_prime",
     name: "素数禁止",
-    description: "素数が出る場合は再抽選します。",
+    description: "素数が出た場合は自動で再抽選します。",
   },
   {
     id: "no_perfect",
     name: "完全数禁止",
-    description: "完全数が出る場合は再抽選します。",
+    description: "完全数が出た場合は自動で再抽選します。",
   },
   {
-    id: "negative_shift",
-    name: "負数化",
-    description: "20%で出目が負数になります。",
+    id: "negative_unlock",
+    name: "負数開放",
+    description: "抽選に負数が含まれます。拡張マスに負数が出ることがあります。",
   },
   {
     id: "absolute_lock",
-    name: "絶対値照準",
-    description: "負数の出目でも絶対値で判定します。",
+    name: "絶対値判定",
+    description: "数字一致ではなく絶対値一致でマスを開きます。",
   },
 ];
 
 const RANK_TABLE = [
-  { rank: "S", min: 12000 },
-  { rank: "A", min: 9000 },
-  { rank: "B", min: 6500 },
-  { rank: "C", min: 4200 },
-  { rank: "D", min: 2500 },
+  { rank: "S", min: 14000 },
+  { rank: "A", min: 10000 },
+  { rank: "B", min: 7200 },
+  { rank: "C", min: 4800 },
+  { rank: "D", min: 2800 },
   { rank: "E", min: 0 },
 ];
 
 const state = {
+  boardSize: CONFIG.initialBoardSize,
+  numberRange: {
+    min: 1,
+    max: CONFIG.initialNumberMax,
+  },
   board: [],
   lines: [],
   completedLineIndexes: new Set(),
@@ -62,6 +71,7 @@ const state = {
   score: 0,
   lastRoll: null,
   waitingPerkChoice: false,
+  drawInProgress: false,
   gameOver: false,
 };
 
@@ -71,6 +81,8 @@ const elements = {
   score: document.getElementById("score"),
   rank: document.getElementById("rank"),
   roll: document.getElementById("roll"),
+  boardSize: document.getElementById("board-size"),
+  drawRange: document.getElementById("draw-range"),
   drawBtn: document.getElementById("draw-btn"),
   restartBtn: document.getElementById("restart-btn"),
   logList: document.getElementById("log-list"),
@@ -79,9 +91,13 @@ const elements = {
   resultScore: document.getElementById("result-score"),
   resultRank: document.getElementById("result-rank"),
   resultLines: document.getElementById("result-lines"),
+  resultEnd: document.getElementById("result-end"),
   shareLink: document.getElementById("share-link"),
   perkModal: document.getElementById("perk-modal"),
   perkOptions: document.getElementById("perk-options"),
+  drawModal: document.getElementById("draw-modal"),
+  drawWindowNumber: document.getElementById("draw-window-number"),
+  drawWindowTrace: document.getElementById("draw-window-trace"),
 };
 
 function init() {
@@ -91,15 +107,13 @@ function init() {
 }
 
 function startGame() {
-  const totalCells = CONFIG.boardSize * CONFIG.boardSize;
-  const numbers = sampleUniqueNumbers(CONFIG.minNumber, CONFIG.maxNumber, totalCells);
-
-  state.board = numbers.map((number) => ({
-    number,
-    opened: false,
-    inCompletedLine: false,
-  }));
-  state.lines = createLines(CONFIG.boardSize);
+  state.boardSize = CONFIG.initialBoardSize;
+  state.numberRange = {
+    min: 1,
+    max: CONFIG.initialNumberMax,
+  };
+  state.board = buildFreshBoard(state.boardSize);
+  state.lines = createLines(state.boardSize);
   state.completedLineIndexes = new Set();
   state.perkCounts = {};
   state.logs = [];
@@ -109,11 +123,14 @@ function startGame() {
   state.score = 0;
   state.lastRoll = null;
   state.waitingPerkChoice = false;
+  state.drawInProgress = false;
   state.gameOver = false;
 
   elements.result.classList.add("hidden");
   elements.perkModal.classList.add("hidden");
+  elements.drawModal.classList.add("hidden");
   elements.drawBtn.disabled = false;
+  elements.restartBtn.disabled = false;
 
   pushLog("ゲーム開始。ハイスコアを狙ってください。");
   renderBoard();
@@ -122,29 +139,36 @@ function startGame() {
   renderLogs();
 }
 
-function onDraw() {
-  if (state.gameOver || state.waitingPerkChoice) {
+async function onDraw() {
+  if (state.gameOver || state.waitingPerkChoice || state.drawInProgress) {
     return;
   }
+
+  state.drawInProgress = true;
+  elements.drawBtn.disabled = true;
+  elements.restartBtn.disabled = true;
 
   state.turnsLeft -= 1;
   state.drawCount += 1;
 
-  const rollResult = generateRoll();
+  const rollResult = generateRollWithTrace();
+  await showDrawWindow(rollResult);
   state.lastRoll = rollResult.value;
 
-  const openedIndex = openCellByRoll(rollResult.value);
-
-  if (openedIndex === -1) {
+  const outcome = openCellByRoll(rollResult.value);
+  if (!outcome.hit) {
     pushLog(`出目 ${formatNumber(rollResult.value)}：ハズレ`);
   }
 
-  if (state.turnsLeft <= 0) {
-    endGame();
+  const allOpened = state.board.every((cell) => cell.opened);
+  if (allOpened || state.turnsLeft <= 0) {
+    endGame(allOpened ? "all-open" : "no-turns");
     renderStatus();
     renderPerkList();
     renderLogs();
     renderBoard();
+    state.drawInProgress = false;
+    elements.restartBtn.disabled = false;
     return;
   }
 
@@ -156,64 +180,82 @@ function onDraw() {
   renderPerkList();
   renderLogs();
   renderBoard();
+
+  state.drawInProgress = false;
+  elements.restartBtn.disabled = false;
+  if (!state.waitingPerkChoice && !state.gameOver) {
+    elements.drawBtn.disabled = false;
+  }
 }
 
-function generateRoll() {
-  const maxAttempts = 40;
+function generateRollWithTrace() {
+  const maxAttempts = 50;
+  const trace = [];
 
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    let value = randomInt(CONFIG.minNumber, CONFIG.maxNumber);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const candidate = drawRandomCandidate();
+    let line = `候補${attempt}: ${formatNumber(candidate)}`;
 
-    const up = getPerkCount("column_up");
-    const down = getPerkCount("column_down");
-    value += up - down;
-
-    if (value > CONFIG.maxNumber) {
-      value = CONFIG.maxNumber;
-    }
-    if (value < -CONFIG.maxNumber) {
-      value = -CONFIG.maxNumber;
-    }
-
-    const negativeChance = Math.min(0.2 * getPerkCount("negative_shift"), 0.85);
-    if (negativeChance > 0 && Math.random() < negativeChance) {
-      value *= -1;
-    }
-
-    if (getPerkCount("no_prime") > 0 && isPrime(Math.abs(value))) {
+    if (getPerkCount("no_prime") > 0 && isPrime(Math.abs(candidate))) {
+      line += " -> 素数禁止で再抽選";
+      trace.push(line);
       continue;
     }
 
-    if (getPerkCount("no_perfect") > 0 && isPerfectNumber(Math.abs(value))) {
+    if (getPerkCount("no_perfect") > 0 && isPerfectNumber(Math.abs(candidate))) {
+      line += " -> 完全数禁止で再抽選";
+      trace.push(line);
       continue;
     }
 
-    return { value };
+    line += " -> 採用";
+    trace.push(line);
+    return {
+      value: candidate,
+      trace,
+    };
   }
 
-  return { value: randomInt(CONFIG.minNumber, CONFIG.maxNumber) };
+  const fallback = drawRandomCandidate();
+  trace.push(`候補上限到達 -> ${formatNumber(fallback)} を採用`);
+  return {
+    value: fallback,
+    trace,
+  };
+}
+
+async function showDrawWindow(rollResult) {
+  elements.drawModal.classList.remove("hidden");
+  elements.drawWindowTrace.textContent = "数字を回しています...";
+
+  const ticker = setInterval(() => {
+    elements.drawWindowNumber.textContent = formatNumber(drawRandomCandidate());
+  }, 70);
+
+  await sleep(CONFIG.drawSpinMs);
+  clearInterval(ticker);
+
+  elements.drawWindowNumber.textContent = formatNumber(rollResult.value);
+  const shortTrace = rollResult.trace.slice(-3);
+  elements.drawWindowTrace.textContent = `${shortTrace.join("\n")}\n最終: ${formatNumber(rollResult.value)}`;
+
+  await sleep(CONFIG.drawRevealMs);
+  elements.drawModal.classList.add("hidden");
 }
 
 function openCellByRoll(roll) {
-  let target = roll;
-  if (getPerkCount("absolute_lock") > 0) {
-    target = Math.abs(target);
-  }
-
-  if (!Number.isInteger(target)) {
-    return -1;
-  }
-
-  const index = state.board.findIndex((cell) => cell.number === target && !cell.opened);
+  const index = findMatchCellIndex(roll);
 
   if (index === -1) {
-    return -1;
+    return { hit: false };
   }
 
-  state.board[index].opened = true;
-  const hitScore = calcHitScore(target);
+  const cell = state.board[index];
+  cell.opened = true;
+
+  const hitScore = calcHitScore(cell.number);
   state.score += hitScore;
-  pushLog(`出目 ${formatNumber(roll)}：${target} が開いた (+${hitScore})`);
+  pushLog(`出目 ${formatNumber(roll)}：${formatNumber(cell.number)} が開いた (+${hitScore})`);
 
   const newLineIndexes = findNewCompletedLineIndexes();
   if (newLineIndexes.length > 0) {
@@ -223,7 +265,7 @@ function openCellByRoll(roll) {
     const lineCount = newLineIndexes.length;
     state.bingoLines += lineCount;
 
-    const bingoScore = calcBingoScore(lineCount, roll);
+    const bingoScore = calcBingoScore(lineCount, roll, state.boardSize);
     state.score += bingoScore;
 
     const turnGain = lineCount * CONFIG.turnBonusPerLine;
@@ -232,7 +274,19 @@ function openCellByRoll(roll) {
     pushLog(`ビンゴ ${lineCount}列成立！ (+${bingoScore}, 回数+${turnGain})`);
   }
 
-  return index;
+  return {
+    hit: true,
+    index,
+  };
+}
+
+function findMatchCellIndex(roll) {
+  if (getPerkCount("absolute_lock") > 0) {
+    const targetAbs = Math.abs(roll);
+    return state.board.findIndex((cell) => !cell.opened && Math.abs(cell.number) === targetAbs);
+  }
+
+  return state.board.findIndex((cell) => !cell.opened && cell.number === roll);
 }
 
 function findNewCompletedLineIndexes() {
@@ -259,7 +313,9 @@ function updateCompletedLineMarks() {
 
   state.completedLineIndexes.forEach((lineIndex) => {
     state.lines[lineIndex].forEach((cellIndex) => {
-      state.board[cellIndex].inCompletedLine = true;
+      if (state.board[cellIndex]) {
+        state.board[cellIndex].inCompletedLine = true;
+      }
     });
   });
 }
@@ -278,11 +334,23 @@ function presentPerkChoices() {
     button.addEventListener("click", () => {
       applyPerk(perk.id);
       state.waitingPerkChoice = false;
-      elements.drawBtn.disabled = false;
       elements.perkModal.classList.add("hidden");
+
+      if (!state.gameOver) {
+        const allOpened = state.board.every((cell) => cell.opened);
+        if (allOpened) {
+          endGame("all-open");
+        }
+      }
+
+      renderBoard();
       renderPerkList();
       renderStatus();
       renderLogs();
+
+      if (!state.gameOver && !state.drawInProgress) {
+        elements.drawBtn.disabled = false;
+      }
     });
     elements.perkOptions.appendChild(button);
   });
@@ -295,21 +363,218 @@ function applyPerk(perkId) {
   state.perkCounts[perkId] = getPerkCount(perkId) + 1;
   const perk = PERKS.find((item) => item.id === perkId);
   pushLog(`パーク取得：${perk.name}`);
+
+  switch (perkId) {
+    case "column_up":
+      applyResizePerk(1);
+      break;
+    case "column_down":
+      applyResizePerk(-1);
+      break;
+    case "negative_unlock":
+      if (state.perkCounts[perkId] === 1) {
+        state.numberRange.min = -state.numberRange.max;
+        const converted = seedNegativeNumbersInExpandedCells();
+        pushLog(`負数が抽選対象に追加されました (${formatRange()})`);
+        if (converted > 0) {
+          pushLog(`拡張マス ${converted} 個が負数マスに変化`);
+        }
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+function applyResizePerk(delta) {
+  const before = state.boardSize;
+  const next = clamp(before + delta, CONFIG.minBoardSize, CONFIG.maxBoardSize);
+
+  expandNumberRange();
+
+  if (next !== before) {
+    resizeBoard(next);
+    pushLog(`盤面サイズ ${before}x${before} -> ${next}x${next}`);
+  } else {
+    pushLog("盤面サイズは上限/下限に到達しているため変更なし");
+  }
+
+  pushLog(`抽選範囲拡大: ${formatRange()}`);
+}
+
+function expandNumberRange() {
+  state.numberRange.max += CONFIG.numberRangeExpand;
+  state.numberRange.min = isNegativeUnlocked() ? -state.numberRange.max : 1;
+}
+
+function resizeBoard(newSize) {
+  const oldSize = state.boardSize;
+  const oldBoard = state.board;
+  const nextBoard = [];
+
+  for (let row = 0; row < newSize; row += 1) {
+    for (let col = 0; col < newSize; col += 1) {
+      if (row < oldSize && col < oldSize) {
+        const oldCell = oldBoard[row * oldSize + col];
+        nextBoard.push({
+          ...oldCell,
+          inCompletedLine: false,
+          isExpanded: isExpandedCell(row, col),
+        });
+      } else {
+        nextBoard.push(null);
+      }
+    }
+  }
+
+  const usedNumbers = new Set(nextBoard.filter(Boolean).map((cell) => cell.number));
+  for (let i = 0; i < nextBoard.length; i += 1) {
+    if (nextBoard[i]) {
+      continue;
+    }
+
+    const row = Math.floor(i / newSize);
+    const col = i % newSize;
+    const expanded = isExpandedCell(row, col);
+    const number = createRandomUniqueNumber(usedNumbers, expanded);
+    usedNumbers.add(number);
+
+    nextBoard[i] = {
+      number,
+      opened: false,
+      inCompletedLine: false,
+      isExpanded: expanded,
+    };
+  }
+
+  state.boardSize = newSize;
+  state.board = nextBoard;
+  state.lines = createLines(newSize);
+  state.completedLineIndexes = findCompletedLineIndexesSnapshot();
+  updateCompletedLineMarks();
+}
+
+function findCompletedLineIndexesSnapshot() {
+  const completed = new Set();
+  state.lines.forEach((line, lineIndex) => {
+    const isComplete = line.every((cellIndex) => state.board[cellIndex].opened);
+    if (isComplete) {
+      completed.add(lineIndex);
+    }
+  });
+  return completed;
+}
+
+function buildFreshBoard(size) {
+  const board = [];
+  const usedNumbers = new Set();
+
+  for (let row = 0; row < size; row += 1) {
+    for (let col = 0; col < size; col += 1) {
+      const expanded = isExpandedCell(row, col);
+      const number = createRandomUniqueNumber(usedNumbers, expanded);
+      usedNumbers.add(number);
+
+      board.push({
+        number,
+        opened: false,
+        inCompletedLine: false,
+        isExpanded: expanded,
+      });
+    }
+  }
+
+  return board;
+}
+
+function seedNegativeNumbersInExpandedCells() {
+  const candidateIndexes = [];
+  const usedNumbers = new Set(state.board.map((cell) => cell.number));
+
+  state.board.forEach((cell, index) => {
+    if (cell.isExpanded && !cell.opened && cell.number > 0) {
+      candidateIndexes.push(index);
+    }
+  });
+
+  if (candidateIndexes.length === 0) {
+    return 0;
+  }
+
+  shuffleInPlace(candidateIndexes);
+  const limit = Math.max(1, Math.floor(candidateIndexes.length * 0.35));
+  let converted = 0;
+
+  for (let i = 0; i < limit; i += 1) {
+    const index = candidateIndexes[i];
+    const current = state.board[index];
+    usedNumbers.delete(current.number);
+
+    let replacement = current.number;
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const candidate = -Math.abs(randomInt(1, state.numberRange.max));
+      if (!usedNumbers.has(candidate)) {
+        replacement = candidate;
+        break;
+      }
+    }
+
+    state.board[index].number = replacement;
+    usedNumbers.add(replacement);
+    converted += 1;
+  }
+
+  return converted;
+}
+
+function createRandomUniqueNumber(usedNumbers, expandedCell) {
+  const min = expandedCell && isNegativeUnlocked() ? state.numberRange.min : 1;
+  const max = state.numberRange.max;
+
+  for (let attempt = 0; attempt < 700; attempt += 1) {
+    const candidate = randomIntExcludingZero(min, max);
+    if (!usedNumbers.has(candidate)) {
+      return candidate;
+    }
+  }
+
+  for (let n = min; n <= max; n += 1) {
+    if (n === 0) {
+      continue;
+    }
+    if (!usedNumbers.has(n)) {
+      return n;
+    }
+  }
+
+  return max + usedNumbers.size + 1;
+}
+
+function drawRandomCandidate() {
+  const min = isNegativeUnlocked() ? state.numberRange.min : 1;
+  const max = state.numberRange.max;
+  return randomIntExcludingZero(min, max);
 }
 
 function renderBoard() {
   elements.board.innerHTML = "";
+  elements.board.style.gridTemplateColumns = `repeat(${state.boardSize}, minmax(0, 1fr))`;
 
   state.board.forEach((cell) => {
     const node = document.createElement("div");
     node.className = "cell";
+
     if (cell.opened) {
       node.classList.add("hit");
     }
     if (cell.inCompletedLine) {
       node.classList.add("bingo");
     }
-    node.textContent = cell.opened ? "●" : String(cell.number);
+    if (cell.isExpanded) {
+      node.classList.add("expanded");
+    }
+
+    node.textContent = formatNumber(cell.number);
     elements.board.appendChild(node);
   });
 }
@@ -319,6 +584,8 @@ function renderStatus() {
   elements.score.textContent = state.score.toLocaleString("ja-JP");
   elements.rank.textContent = getRank(state.score);
   elements.roll.textContent = state.lastRoll === null ? "-" : formatNumber(state.lastRoll);
+  elements.boardSize.textContent = `${state.boardSize}x${state.boardSize}`;
+  elements.drawRange.textContent = formatRange();
 }
 
 function renderPerkList() {
@@ -350,17 +617,22 @@ function renderLogs() {
   });
 }
 
-function endGame() {
+function endGame(reason) {
   state.gameOver = true;
   state.waitingPerkChoice = false;
+  state.drawInProgress = false;
   elements.perkModal.classList.add("hidden");
+  elements.drawModal.classList.add("hidden");
   elements.drawBtn.disabled = true;
+  elements.restartBtn.disabled = false;
 
   const rank = getRank(state.score);
+  const endText = reason === "all-open" ? "全マス開放" : "残り回数が0";
 
   elements.resultScore.textContent = `最終スコア: ${state.score.toLocaleString("ja-JP")}`;
   elements.resultRank.textContent = `ランク: ${rank}`;
   elements.resultLines.textContent = `成立ビンゴ列: ${state.bingoLines}`;
+  elements.resultEnd.textContent = `終了条件: ${endText}`;
   elements.result.classList.remove("hidden");
 
   const shareText = [
@@ -368,21 +640,24 @@ function endGame() {
     `スコア: ${state.score}`,
     `ランク: ${rank}`,
     `ビンゴ列: ${state.bingoLines}`,
+    `終了条件: ${endText}`,
+    `盤面: ${state.boardSize}x${state.boardSize}`,
     "#ローグライクビンゴ",
   ].join("\n");
 
   elements.shareLink.href = `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
-  pushLog("ゲーム終了。結果をXに共有できます。");
+  pushLog(`ゲーム終了（${endText}）。結果をXに共有できます。`);
 }
 
-function calcHitScore(targetNumber) {
-  return Math.max(20, Math.floor(Math.abs(targetNumber) * 1.8));
+function calcHitScore(cellNumber) {
+  return Math.max(22, Math.floor(Math.abs(cellNumber) * 1.8));
 }
 
-function calcBingoScore(newLineCount, roll) {
-  const base = 240 + Math.floor(Math.abs(roll) * 12);
-  const comboBonus = newLineCount * newLineCount * 60;
-  return newLineCount * base + comboBonus;
+function calcBingoScore(newLineCount, roll, boardSize) {
+  const sizeScale = 1 + (boardSize - CONFIG.initialBoardSize) * 0.12;
+  const base = 250 + Math.floor(Math.abs(roll) * 10);
+  const combo = newLineCount * newLineCount * 70;
+  return Math.floor((newLineCount * base + combo) * sizeScale);
 }
 
 function getRank(score) {
@@ -396,6 +671,10 @@ function getRank(score) {
 
 function getPerkCount(perkId) {
   return state.perkCounts[perkId] || 0;
+}
+
+function isNegativeUnlocked() {
+  return getPerkCount("negative_unlock") > 0;
 }
 
 function pickRandomPerks(count) {
@@ -434,17 +713,27 @@ function createLines(size) {
   return lines;
 }
 
-function sampleUniqueNumbers(min, max, count) {
-  const pool = [];
-  for (let i = min; i <= max; i += 1) {
-    pool.push(i);
-  }
-  shuffleInPlace(pool);
-  return pool.slice(0, count);
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function randomIntExcludingZero(min, max) {
+  if (min === 0 && max === 0) {
+    return 1;
+  }
+
+  let value = randomInt(min, max);
+  if (value === 0) {
+    value = Math.random() < 0.5 ? -1 : 1;
+    if (value < min || value > max) {
+      value = min === 0 ? 1 : min;
+    }
+  }
+  return value;
 }
 
 function shuffleInPlace(array) {
@@ -494,6 +783,10 @@ function isPerfectNumber(n) {
   return sum === n;
 }
 
+function isExpandedCell(row, col) {
+  return row >= CONFIG.initialBoardSize || col >= CONFIG.initialBoardSize;
+}
+
 function formatNumber(value) {
   if (value < 0) {
     return `-${Math.abs(value)}`;
@@ -501,11 +794,21 @@ function formatNumber(value) {
   return String(value);
 }
 
+function formatRange() {
+  return `${formatNumber(state.numberRange.min)}..${formatNumber(state.numberRange.max)}`;
+}
+
 function pushLog(message) {
   state.logs.unshift(message);
   if (state.logs.length > CONFIG.maxLogEntries) {
     state.logs = state.logs.slice(0, CONFIG.maxLogEntries);
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 init();

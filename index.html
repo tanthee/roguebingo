@@ -39,6 +39,14 @@
           <span class="label">現在の出目</span>
           <strong id="roll">-</strong>
         </div>
+        <div class="status-card">
+          <span class="label">盤面サイズ</span>
+          <strong id="board-size">5x5</strong>
+        </div>
+        <div class="status-card">
+          <span class="label">抽選範囲</span>
+          <strong id="draw-range">1..75</strong>
+        </div>
       </section>
 
       <section class="game-panel">
@@ -65,6 +73,7 @@
         <p id="result-score"></p>
         <p id="result-rank"></p>
         <p id="result-lines"></p>
+        <p id="result-end"></p>
         <a id="share-link" class="primary-btn share-link" href="#" target="_blank" rel="noopener noreferrer">Xに共有</a>
       </section>
     </main>
@@ -74,6 +83,14 @@
         <h2 id="perk-title">パークを選択</h2>
         <p>5回ごとの報酬です。3つの中から1つ選んでください。</p>
         <div id="perk-options" class="perk-options"></div>
+      </div>
+    </section>
+
+    <section id="draw-modal" class="draw-window hidden" aria-live="polite">
+      <div class="draw-window-card">
+        <p class="draw-window-title">抽選中</p>
+        <strong id="draw-window-number">--</strong>
+        <p id="draw-window-trace">数字を回しています...</p>
       </div>
     </section>
 

@@ -57,14 +57,14 @@ body {
 .app {
   max-width: 720px;
   margin: 0 auto;
-  padding: 20px 14px 40px;
+  padding: 12px 10px 28px;
   position: relative;
   z-index: 1;
 }
 
 .app-header {
   text-align: center;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 h1,
@@ -75,20 +75,20 @@ h2 {
 }
 
 h1 {
-  font-size: 1.8rem;
+  font-size: 1.45rem;
   letter-spacing: 0.02em;
 }
 
 .subtitle {
-  margin-top: 6px;
+  margin-top: 3px;
   color: var(--sub);
-  font-size: 0.95rem;
+  font-size: 0.8rem;
 }
 
 .status-panel {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .status-card,
@@ -103,24 +103,24 @@ h1 {
 }
 
 .status-card {
-  padding: 10px 12px;
+  padding: 7px 8px;
 }
 
 .status-card .label {
   display: block;
-  font-size: 0.76rem;
+  font-size: 0.64rem;
   color: var(--sub);
 }
 
 .status-card strong {
-  font-size: 1.25rem;
+  font-size: 0.9rem;
   line-height: 1.15;
   word-break: break-word;
 }
 
 .game-panel {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: 8px;
+  padding: 8px;
 }
 
 .board {
@@ -172,8 +172,8 @@ h1 {
 .controls {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 8px;
   align-items: center;
 }
 
@@ -182,8 +182,8 @@ button,
   border: none;
   border-radius: 999px;
   font-family: inherit;
-  font-size: 0.98rem;
-  padding: 11px 14px;
+  font-size: 0.9rem;
+  padding: 9px 10px;
   cursor: pointer;
   text-align: center;
   text-decoration: none;
@@ -207,18 +207,29 @@ button,
 }
 
 .rebuild-btn {
-  grid-column: 1 / -1;
   background: #fff1db;
   border: 1.5px solid #dc8f47;
   color: #7a4310;
   font-weight: 700;
 }
 
+.sub-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.small-btn {
+  font-size: 0.78rem;
+  padding: 7px 10px;
+}
+
 .perks-panel,
 .log-panel,
 .result-panel {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: 8px;
+  padding: 8px;
 }
 
 .perks-panel h2,
@@ -287,6 +298,30 @@ button,
   border: 2px solid #efbe72;
   padding: 14px;
   box-shadow: var(--shadow);
+}
+
+.modal-card-scroll {
+  max-height: min(72vh, 520px);
+  overflow: auto;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.icon-close {
+  border-radius: 10px;
+  border: 1px solid #d4a05e;
+  background: #fff1d4;
+  color: #744016;
+  width: 32px;
+  height: 32px;
+  line-height: 1;
+  font-size: 1.05rem;
+  padding: 0;
 }
 
 .modal-card p {
@@ -390,6 +425,6 @@ button,
   }
 
   .status-panel {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

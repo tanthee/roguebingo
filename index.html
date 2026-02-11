@@ -63,27 +63,17 @@
         <div class="controls">
           <button id="draw-btn" class="primary-btn" type="button">数字を回す</button>
           <button id="reset-btn" class="rebuild-btn" type="button">穴あきリセット</button>
-          <button id="restart-btn" class="ghost-btn" type="button">リスタート</button>
+        </div>
+
+        <div class="sub-controls">
+          <button id="open-log-btn" class="ghost-btn small-btn" type="button">ログ</button>
+          <button id="open-result-btn" class="ghost-btn small-btn" type="button" disabled>リザルト</button>
         </div>
       </section>
 
       <section class="perks-panel" aria-label="取得済みパーク">
         <h2>取得済みパーク</h2>
         <div id="active-perks" class="perk-list"></div>
-      </section>
-
-      <section class="log-panel" aria-label="ログ">
-        <h2>ログ</h2>
-        <ul id="log-list"></ul>
-      </section>
-
-      <section id="result" class="result-panel hidden" aria-live="polite">
-        <h2>結果</h2>
-        <p id="result-score"></p>
-        <p id="result-rank"></p>
-        <p id="result-lines"></p>
-        <p id="result-end"></p>
-        <a id="share-link" class="primary-btn share-link" href="#" target="_blank" rel="noopener noreferrer">Xに共有</a>
       </section>
     </main>
 
@@ -100,6 +90,30 @@
         <p id="draw-window-title" class="draw-window-title">抽選中</p>
         <strong id="draw-window-number">--</strong>
         <p id="draw-window-trace">数字を回しています...</p>
+      </div>
+    </section>
+
+    <section id="log-modal" class="modal hidden" aria-modal="true" role="dialog" aria-labelledby="log-title">
+      <div class="modal-card modal-card-scroll">
+        <div class="modal-head">
+          <h2 id="log-title">ログ</h2>
+          <button id="close-log-btn" class="icon-close" type="button" aria-label="ログを閉じる">×</button>
+        </div>
+        <ul id="log-list"></ul>
+      </div>
+    </section>
+
+    <section id="result-modal" class="modal hidden" aria-modal="true" role="dialog" aria-labelledby="result-title">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h2 id="result-title">結果</h2>
+          <button id="close-result-btn" class="icon-close" type="button" aria-label="結果を閉じる">×</button>
+        </div>
+        <p id="result-score"></p>
+        <p id="result-rank"></p>
+        <p id="result-lines"></p>
+        <p id="result-end"></p>
+        <a id="share-link" class="primary-btn share-link" href="#" target="_blank" rel="noopener noreferrer">Xに共有</a>
       </div>
     </section>
 

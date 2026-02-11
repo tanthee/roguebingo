@@ -136,10 +136,14 @@ const elements = {
   resetCost: document.getElementById("reset-cost"),
   drawBtn: document.getElementById("draw-btn"),
   resetBtn: document.getElementById("reset-btn"),
-  restartBtn: document.getElementById("restart-btn"),
+  openLogBtn: document.getElementById("open-log-btn"),
+  closeLogBtn: document.getElementById("close-log-btn"),
+  openResultBtn: document.getElementById("open-result-btn"),
+  closeResultBtn: document.getElementById("close-result-btn"),
+  logModal: document.getElementById("log-modal"),
   logList: document.getElementById("log-list"),
   activePerks: document.getElementById("active-perks"),
-  result: document.getElementById("result"),
+  resultModal: document.getElementById("result-modal"),
   resultScore: document.getElementById("result-score"),
   resultRank: document.getElementById("result-rank"),
   resultLines: document.getElementById("result-lines"),
@@ -156,7 +160,10 @@ const elements = {
 function init() {
   elements.drawBtn.addEventListener("click", onDraw);
   elements.resetBtn.addEventListener("click", onResetBoard);
-  elements.restartBtn.addEventListener("click", startGame);
+  elements.openLogBtn.addEventListener("click", openLogModal);
+  elements.closeLogBtn.addEventListener("click", closeLogModal);
+  elements.openResultBtn.addEventListener("click", openResultModal);
+  elements.closeResultBtn.addEventListener("click", closeResultModal);
   startGame();
 }
 
@@ -182,12 +189,13 @@ function startGame() {
   state.drawInProgress = false;
   state.gameOver = false;
 
-  elements.result.classList.add("hidden");
+  elements.resultModal.classList.add("hidden");
+  elements.logModal.classList.add("hidden");
   elements.perkModal.classList.add("hidden");
   elements.drawModal.classList.add("hidden");
   elements.drawBtn.disabled = false;
   elements.resetBtn.disabled = false;
-  elements.restartBtn.disabled = false;
+  elements.openResultBtn.disabled = true;
 
   pushLog("ゲーム開始。ハイスコアを狙ってください。");
   renderBoard();
@@ -204,7 +212,6 @@ async function onDraw() {
   state.drawInProgress = true;
   elements.drawBtn.disabled = true;
   elements.resetBtn.disabled = true;
-  elements.restartBtn.disabled = true;
 
   state.turnsLeft -= 1;
   state.drawCount += 1;
@@ -284,7 +291,6 @@ function onResetBoard() {
 
 function finishDrawPhase() {
   state.drawInProgress = false;
-  elements.restartBtn.disabled = false;
   if (!state.gameOver && !state.waitingPerkChoice) {
     elements.drawBtn.disabled = false;
     elements.resetBtn.disabled = false;
@@ -872,7 +878,7 @@ function endGame(reason) {
   elements.drawModal.classList.add("hidden");
   elements.drawBtn.disabled = true;
   elements.resetBtn.disabled = true;
-  elements.restartBtn.disabled = false;
+  elements.openResultBtn.disabled = false;
 
   const rank = getRank(state.score);
   const endText = reason === "all-open" ? "全マス開放" : "残り回数が0";
@@ -881,7 +887,7 @@ function endGame(reason) {
   elements.resultRank.textContent = `ランク: ${rank}`;
   elements.resultLines.textContent = `成立ビンゴ列: ${state.bingoLines}`;
   elements.resultEnd.textContent = `終了条件: ${endText}`;
-  elements.result.classList.remove("hidden");
+  elements.resultModal.classList.remove("hidden");
 
   const shareText = [
     "ローグライクビンゴの結果",
@@ -897,6 +903,25 @@ function endGame(reason) {
 
   elements.shareLink.href = `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
   pushLog(`ゲーム終了（${endText}）。結果をXに共有できます。`);
+}
+
+function openLogModal() {
+  elements.logModal.classList.remove("hidden");
+}
+
+function closeLogModal() {
+  elements.logModal.classList.add("hidden");
+}
+
+function openResultModal() {
+  if (elements.openResultBtn.disabled) {
+    return;
+  }
+  elements.resultModal.classList.remove("hidden");
+}
+
+function closeResultModal() {
+  elements.resultModal.classList.add("hidden");
 }
 
 function calcHitScore(cellNumber) {

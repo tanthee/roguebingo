@@ -118,6 +118,7 @@ const state = {
   score: 0,
   lastRolls: [],
   comboStreak: 0,
+  resetCount: 0,
   waitingPerkChoice: false,
   drawInProgress: false,
   gameOver: false,
@@ -132,7 +133,9 @@ const elements = {
   boardSize: document.getElementById("board-size"),
   drawRange: document.getElementById("draw-range"),
   rollsPerDraw: document.getElementById("rolls-per-draw"),
+  resetCost: document.getElementById("reset-cost"),
   drawBtn: document.getElementById("draw-btn"),
+  resetBtn: document.getElementById("reset-btn"),
   restartBtn: document.getElementById("restart-btn"),
   logList: document.getElementById("log-list"),
   activePerks: document.getElementById("active-perks"),
@@ -152,6 +155,7 @@ const elements = {
 
 function init() {
   elements.drawBtn.addEventListener("click", onDraw);
+  elements.resetBtn.addEventListener("click", onResetBoard);
   elements.restartBtn.addEventListener("click", startGame);
   startGame();
 }
@@ -173,6 +177,7 @@ function startGame() {
   state.score = 0;
   state.lastRolls = [];
   state.comboStreak = 0;
+  state.resetCount = 0;
   state.waitingPerkChoice = false;
   state.drawInProgress = false;
   state.gameOver = false;
@@ -181,6 +186,7 @@ function startGame() {
   elements.perkModal.classList.add("hidden");
   elements.drawModal.classList.add("hidden");
   elements.drawBtn.disabled = false;
+  elements.resetBtn.disabled = false;
   elements.restartBtn.disabled = false;
 
   pushLog("ゲーム開始。ハイスコアを狙ってください。");
@@ -197,6 +203,7 @@ async function onDraw() {
 
   state.drawInProgress = true;
   elements.drawBtn.disabled = true;
+  elements.resetBtn.disabled = true;
   elements.restartBtn.disabled = true;
 
   state.turnsLeft -= 1;
@@ -231,11 +238,56 @@ async function onDraw() {
   finishDrawPhase();
 }
 
+function onResetBoard() {
+  if (state.gameOver || state.waitingPerkChoice || state.drawInProgress) {
+    return;
+  }
+
+  const openedCount = state.board.filter((cell) => cell.opened).length;
+  if (openedCount === 0) {
+    pushLog("開放済みマスがないためリセットできません");
+    renderLogs();
+    return;
+  }
+
+  const turnCost = calcResetTurnCost();
+  const scoreCost = calcResetScoreCost();
+
+  state.turnsLeft -= turnCost;
+  state.score = Math.max(0, state.score - scoreCost);
+  state.resetCount += 1;
+  state.lastRolls = [];
+  state.comboStreak = 0;
+
+  state.board.forEach((cell) => {
+    cell.opened = false;
+    cell.inCompletedLine = false;
+  });
+  state.completedLineIndexes = new Set();
+
+  pushLog(`穴あきリセット実行: 回数-${turnCost}, スコア-${scoreCost}`);
+
+  if (state.turnsLeft <= 0) {
+    endGame("no-turns");
+    renderStatus();
+    renderPerkList();
+    renderLogs();
+    renderBoard();
+    return;
+  }
+
+  renderBoard();
+  renderStatus();
+  renderPerkList();
+  renderLogs();
+}
+
 function finishDrawPhase() {
   state.drawInProgress = false;
   elements.restartBtn.disabled = false;
   if (!state.gameOver && !state.waitingPerkChoice) {
     elements.drawBtn.disabled = false;
+    elements.resetBtn.disabled = false;
   }
 }
 
@@ -493,6 +545,7 @@ function presentPerkChoices() {
   const choices = pickRandomPerks(3);
   state.waitingPerkChoice = true;
   elements.drawBtn.disabled = true;
+  elements.resetBtn.disabled = true;
   elements.perkOptions.innerHTML = "";
 
   choices.forEach((perk) => {
@@ -519,6 +572,7 @@ function presentPerkChoices() {
 
       if (!state.gameOver && !state.drawInProgress) {
         elements.drawBtn.disabled = false;
+        elements.resetBtn.disabled = false;
       }
     });
     elements.perkOptions.appendChild(button);
@@ -778,6 +832,7 @@ function renderStatus() {
   elements.boardSize.textContent = `${state.boardSize}x${state.boardSize}`;
   elements.drawRange.textContent = formatRange();
   elements.rollsPerDraw.textContent = String(getRollsPerDraw());
+  elements.resetCost.textContent = `回数-${calcResetTurnCost()} / スコア-${calcResetScoreCost().toLocaleString("ja-JP")}`;
 }
 
 function renderPerkList() {
@@ -816,6 +871,7 @@ function endGame(reason) {
   elements.perkModal.classList.add("hidden");
   elements.drawModal.classList.add("hidden");
   elements.drawBtn.disabled = true;
+  elements.resetBtn.disabled = true;
   elements.restartBtn.disabled = false;
 
   const rank = getRank(state.score);
@@ -835,6 +891,7 @@ function endGame(reason) {
     `終了条件: ${endText}`,
     `盤面: ${state.boardSize}x${state.boardSize}`,
     `抽選数/回: ${getRollsPerDraw()}`,
+    `リセット回数: ${state.resetCount}`,
     "#ローグライクビンゴ",
   ].join("\n");
 
@@ -871,6 +928,17 @@ function calcHitTurnGain() {
 
 function calcTurnGainPerBingoLine() {
   return CONFIG.turnBonusPerLine;
+}
+
+function calcResetTurnCost() {
+  return 2 * 2 ** state.resetCount;
+}
+
+function calcResetScoreCost() {
+  if (state.score <= 0) {
+    return 0;
+  }
+  return Math.ceil(state.score * 0.1);
 }
 
 function getRollsPerDraw() {

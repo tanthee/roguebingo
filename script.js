@@ -457,6 +457,7 @@ function findMatchCellIndex(roll) {
 }
 
 function findNewCompletedLineIndexes() {
+  syncLinesWithBoardSize();
   const indexes = [];
 
   state.lines.forEach((line, lineIndex) => {
@@ -474,6 +475,7 @@ function findNewCompletedLineIndexes() {
 }
 
 function updateCompletedLineMarks() {
+  syncLinesWithBoardSize();
   state.board.forEach((cell) => {
     cell.inCompletedLine = false;
   });
@@ -634,6 +636,7 @@ function resizeBoard(newSize) {
 }
 
 function findCompletedLineIndexesSnapshot() {
+  syncLinesWithBoardSize();
   const completed = new Set();
   state.lines.forEach((line, lineIndex) => {
     const isComplete = line.every((cellIndex) => state.board[cellIndex].opened);
@@ -754,7 +757,15 @@ function renderBoard() {
       node.classList.add("expanded");
     }
 
-    node.textContent = formatNumber(cell.number);
+    if (cell.opened) {
+      node.textContent = "●";
+      node.setAttribute("aria-label", `開放済み ${formatNumber(cell.number)}`);
+      node.title = `開放済み: ${formatNumber(cell.number)}`;
+    } else {
+      node.textContent = formatNumber(cell.number);
+      node.setAttribute("aria-label", `未開放 ${formatNumber(cell.number)}`);
+      node.title = `未開放: ${formatNumber(cell.number)}`;
+    }
     elements.board.appendChild(node);
   });
 }
@@ -992,6 +1003,21 @@ function isPerfectNumber(n) {
 
 function isExpandedCell(row, col) {
   return row >= CONFIG.initialBoardSize || col >= CONFIG.initialBoardSize;
+}
+
+function syncLinesWithBoardSize() {
+  const expectedLineCount = state.boardSize * 2 + 2;
+  if (state.lines.length !== expectedLineCount) {
+    state.lines = createLines(state.boardSize);
+  }
+
+  const normalized = new Set();
+  state.completedLineIndexes.forEach((index) => {
+    if (index >= 0 && index < state.lines.length) {
+      normalized.add(index);
+    }
+  });
+  state.completedLineIndexes = normalized;
 }
 
 function getCellFontSize(boardSize) {

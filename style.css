@@ -147,6 +147,7 @@ h1 {
 .cell.hit {
   background: var(--hit);
   transform: translateY(-1px) scale(1.02);
+  color: #8f4f09;
 }
 
 .cell.bingo {
@@ -157,6 +158,15 @@ h1 {
 .cell.expanded {
   border-style: dashed;
   background: #fff3de;
+}
+
+.cell.expanded.hit {
+  background: #ffd699;
+  border-style: solid;
+}
+
+.cell.expanded.bingo {
+  background: #ffc76e;
 }
 
 .controls {

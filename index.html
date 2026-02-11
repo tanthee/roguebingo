@@ -47,6 +47,10 @@
           <span class="label">抽選範囲</span>
           <strong id="draw-range">1..75</strong>
         </div>
+        <div class="status-card">
+          <span class="label">抽選数/回</span>
+          <strong id="rolls-per-draw">1</strong>
+        </div>
       </section>
 
       <section class="game-panel">
@@ -88,7 +92,7 @@
 
     <section id="draw-modal" class="draw-window hidden" aria-live="polite">
       <div class="draw-window-card">
-        <p class="draw-window-title">抽選中</p>
+        <p id="draw-window-title" class="draw-window-title">抽選中</p>
         <strong id="draw-window-number">--</strong>
         <p id="draw-window-trace">数字を回しています...</p>
       </div>

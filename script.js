@@ -1,22 +1,24 @@
 ﻿const CONFIG = {
   initialBoardSize: 5,
   minBoardSize: 3,
-  maxBoardSize: 8,
-  initialTurns: 20,
+  maxBoardSize: 12,
+  initialTurns: 30,
   perkInterval: 5,
   turnBonusPerLine: 2,
-  maxLogEntries: 16,
+  turnBonusPerHit: 1,
+  maxLogEntries: 18,
   initialNumberMax: 75,
   numberRangeExpand: 15,
-  drawSpinMs: 820,
-  drawRevealMs: 760,
+  drawSpinMs: 760,
+  drawRevealMs: 820,
+  maxRollsPerDraw: 6,
 };
 
 const PERKS = [
   {
     id: "column_up",
     name: "列増加",
-    description: "盤面を1段階拡張し、抽選範囲を拡大します。",
+    description: "盤面を1段階拡張し、抽選範囲を拡大します（最大12x12）。",
   },
   {
     id: "column_down",
@@ -36,21 +38,66 @@ const PERKS = [
   {
     id: "negative_unlock",
     name: "負数開放",
-    description: "抽選に負数が含まれます。拡張マスに負数が出ることがあります。",
+    description: "抽選に負数が含まれます。拡張マスに負数が出現します。",
   },
   {
     id: "absolute_lock",
     name: "絶対値判定",
     description: "数字一致ではなく絶対値一致でマスを開きます。",
   },
+  {
+    id: "multi_roll",
+    name: "多重抽選",
+    description: "1回の抽選で出る数字が +1 されます（重複可）。",
+  },
+  {
+    id: "hit_turn_boost",
+    name: "採掘効率",
+    description: "穴が開くたびに得られる回数ボーナスが +1 されます。",
+  },
+  {
+    id: "guided_aim",
+    name: "狙い撃ち",
+    description: "一定確率で未開放マスの数字を直接引き当てます。",
+  },
+  {
+    id: "miss_refund",
+    name: "ハズレ保険",
+    description: "1回の抽選で全ハズレなら回数を払い戻します。",
+  },
+  {
+    id: "hit_score_boost",
+    name: "掘削倍率",
+    description: "穴あき時のスコアが増加します。",
+  },
+  {
+    id: "bingo_score_boost",
+    name: "列共鳴",
+    description: "ビンゴ成立時のスコアが増加します。",
+  },
+  {
+    id: "seven_fever",
+    name: "セブンフィーバー",
+    description: "7の倍数で穴が開くと追加スコアを獲得します。",
+  },
+  {
+    id: "combo_drive",
+    name: "コンボドライブ",
+    description: "連続ヒット抽選が続くほど追加スコアが増えます。",
+  },
+  {
+    id: "burst_chain",
+    name: "バースト連鎖",
+    description: "同一抽選で2ヒット以上すると追加スコアを獲得します。",
+  },
 ];
 
 const RANK_TABLE = [
-  { rank: "S", min: 14000 },
-  { rank: "A", min: 10000 },
-  { rank: "B", min: 7200 },
-  { rank: "C", min: 4800 },
-  { rank: "D", min: 2800 },
+  { rank: "S", min: 26000 },
+  { rank: "A", min: 18000 },
+  { rank: "B", min: 12000 },
+  { rank: "C", min: 7600 },
+  { rank: "D", min: 4200 },
   { rank: "E", min: 0 },
 ];
 
@@ -69,7 +116,8 @@ const state = {
   drawCount: 0,
   bingoLines: 0,
   score: 0,
-  lastRoll: null,
+  lastRolls: [],
+  comboStreak: 0,
   waitingPerkChoice: false,
   drawInProgress: false,
   gameOver: false,
@@ -83,6 +131,7 @@ const elements = {
   roll: document.getElementById("roll"),
   boardSize: document.getElementById("board-size"),
   drawRange: document.getElementById("draw-range"),
+  rollsPerDraw: document.getElementById("rolls-per-draw"),
   drawBtn: document.getElementById("draw-btn"),
   restartBtn: document.getElementById("restart-btn"),
   logList: document.getElementById("log-list"),
@@ -96,6 +145,7 @@ const elements = {
   perkModal: document.getElementById("perk-modal"),
   perkOptions: document.getElementById("perk-options"),
   drawModal: document.getElementById("draw-modal"),
+  drawWindowTitle: document.getElementById("draw-window-title"),
   drawWindowNumber: document.getElementById("draw-window-number"),
   drawWindowTrace: document.getElementById("draw-window-trace"),
 };
@@ -121,7 +171,8 @@ function startGame() {
   state.drawCount = 0;
   state.bingoLines = 0;
   state.score = 0;
-  state.lastRoll = null;
+  state.lastRolls = [];
+  state.comboStreak = 0;
   state.waitingPerkChoice = false;
   state.drawInProgress = false;
   state.gameOver = false;
@@ -151,14 +202,12 @@ async function onDraw() {
   state.turnsLeft -= 1;
   state.drawCount += 1;
 
-  const rollResult = generateRollWithTrace();
-  await showDrawWindow(rollResult);
-  state.lastRoll = rollResult.value;
+  const rollBatch = generateRollBatchWithTrace(getRollsPerDraw());
+  await showDrawWindow(rollBatch);
+  state.lastRolls = [...rollBatch.values];
 
-  const outcome = openCellByRoll(rollResult.value);
-  if (!outcome.hit) {
-    pushLog(`出目 ${formatNumber(rollResult.value)}：ハズレ`);
-  }
+  const drawOutcome = resolveRollBatch(rollBatch.values);
+  applyDrawSummaryPerks(drawOutcome);
 
   const allOpened = state.board.every((cell) => cell.opened);
   if (allOpened || state.turnsLeft <= 0) {
@@ -167,8 +216,7 @@ async function onDraw() {
     renderPerkList();
     renderLogs();
     renderBoard();
-    state.drawInProgress = false;
-    elements.restartBtn.disabled = false;
+    finishDrawPhase();
     return;
   }
 
@@ -180,67 +228,176 @@ async function onDraw() {
   renderPerkList();
   renderLogs();
   renderBoard();
+  finishDrawPhase();
+}
 
+function finishDrawPhase() {
   state.drawInProgress = false;
   elements.restartBtn.disabled = false;
-  if (!state.waitingPerkChoice && !state.gameOver) {
+  if (!state.gameOver && !state.waitingPerkChoice) {
     elements.drawBtn.disabled = false;
   }
 }
 
-function generateRollWithTrace() {
-  const maxAttempts = 50;
+function generateRollBatchWithTrace(rollCount) {
+  const values = [];
   const trace = [];
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const candidate = drawRandomCandidate();
-    let line = `候補${attempt}: ${formatNumber(candidate)}`;
-
-    if (getPerkCount("no_prime") > 0 && isPrime(Math.abs(candidate))) {
-      line += " -> 素数禁止で再抽選";
-      trace.push(line);
-      continue;
-    }
-
-    if (getPerkCount("no_perfect") > 0 && isPerfectNumber(Math.abs(candidate))) {
-      line += " -> 完全数禁止で再抽選";
-      trace.push(line);
-      continue;
-    }
-
-    line += " -> 採用";
-    trace.push(line);
-    return {
-      value: candidate,
-      trace,
-    };
+  for (let i = 0; i < rollCount; i += 1) {
+    const single = generateSingleRollWithTrace(i + 1);
+    values.push(single.value);
+    trace.push(single.summary);
   }
 
-  const fallback = drawRandomCandidate();
-  trace.push(`候補上限到達 -> ${formatNumber(fallback)} を採用`);
   return {
-    value: fallback,
+    values,
     trace,
   };
 }
 
-async function showDrawWindow(rollResult) {
+function generateSingleRollWithTrace(slot) {
+  const maxAttempts = 60;
+  let rejectedPrime = 0;
+  let rejectedPerfect = 0;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const guidedCandidate = maybePickGuidedCandidate();
+    const source = guidedCandidate !== null ? "狙い撃ち" : "通常";
+    const candidate = guidedCandidate !== null ? guidedCandidate : drawRandomCandidate();
+
+    if (getPerkCount("no_prime") > 0 && isPrime(Math.abs(candidate))) {
+      rejectedPrime += 1;
+      continue;
+    }
+
+    if (getPerkCount("no_perfect") > 0 && isPerfectNumber(Math.abs(candidate))) {
+      rejectedPerfect += 1;
+      continue;
+    }
+
+    return {
+      value: candidate,
+      summary: `抽選${slot}: ${formatNumber(candidate)} (${source} / 試行${attempt} / 素数棄却${rejectedPrime} / 完全数棄却${rejectedPerfect})`,
+    };
+  }
+
+  const fallback = drawRandomCandidate();
+  return {
+    value: fallback,
+    summary: `抽選${slot}: ${formatNumber(fallback)} (候補上限到達)`,
+  };
+}
+
+function maybePickGuidedCandidate() {
+  const perkCount = getPerkCount("guided_aim");
+  if (perkCount <= 0) {
+    return null;
+  }
+
+  const chance = Math.min(0.18 * perkCount, 0.72);
+  if (Math.random() >= chance) {
+    return null;
+  }
+
+  const candidates = state.board
+    .filter((cell) => !cell.opened)
+    .map((cell) => cell.number)
+    .filter((number) => passesRollRestrictions(number));
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return candidates[randomInt(0, candidates.length - 1)];
+}
+
+function passesRollRestrictions(value) {
+  if (getPerkCount("no_prime") > 0 && isPrime(Math.abs(value))) {
+    return false;
+  }
+  if (getPerkCount("no_perfect") > 0 && isPerfectNumber(Math.abs(value))) {
+    return false;
+  }
+  return true;
+}
+
+async function showDrawWindow(rollBatch) {
   elements.drawModal.classList.remove("hidden");
+  elements.drawWindowTitle.textContent = `抽選中 x${rollBatch.values.length}`;
   elements.drawWindowTrace.textContent = "数字を回しています...";
 
   const ticker = setInterval(() => {
-    elements.drawWindowNumber.textContent = formatNumber(drawRandomCandidate());
-  }, 70);
+    const preview = [];
+    for (let i = 0; i < rollBatch.values.length; i += 1) {
+      preview.push(formatNumber(drawRandomCandidate()));
+    }
+    elements.drawWindowNumber.textContent = preview.join(" / ");
+  }, 80);
 
   await sleep(CONFIG.drawSpinMs);
   clearInterval(ticker);
 
-  elements.drawWindowNumber.textContent = formatNumber(rollResult.value);
-  const shortTrace = rollResult.trace.slice(-3);
-  elements.drawWindowTrace.textContent = `${shortTrace.join("\n")}\n最終: ${formatNumber(rollResult.value)}`;
+  const finalText = rollBatch.values.map((value) => formatNumber(value)).join(" / ");
+  elements.drawWindowNumber.textContent = finalText;
+  elements.drawWindowTrace.textContent = `${rollBatch.trace.slice(-5).join("\n")}\n最終: ${finalText}`;
 
   await sleep(CONFIG.drawRevealMs);
   elements.drawModal.classList.add("hidden");
+}
+
+function resolveRollBatch(rollValues) {
+  let hitCount = 0;
+  const missValues = [];
+
+  rollValues.forEach((roll) => {
+    const outcome = openCellByRoll(roll);
+    if (outcome.hit) {
+      hitCount += 1;
+      return;
+    }
+
+    missValues.push(roll);
+  });
+
+  if (missValues.length === 1) {
+    pushLog(`出目 ${formatNumber(missValues[0])}：ハズレ`);
+  } else if (missValues.length > 1) {
+    pushLog(`ハズレ: ${missValues.map((value) => formatNumber(value)).join(", ")}`);
+  }
+
+  return {
+    hitCount,
+    missValues,
+    rollCount: rollValues.length,
+  };
+}
+
+function applyDrawSummaryPerks(drawOutcome) {
+  if (drawOutcome.hitCount > 0) {
+    state.comboStreak += 1;
+  } else {
+    state.comboStreak = 0;
+  }
+
+  const refundPerk = getPerkCount("miss_refund");
+  if (drawOutcome.hitCount === 0 && refundPerk > 0) {
+    state.turnsLeft += refundPerk;
+    pushLog(`ハズレ保険で回数 +${refundPerk}`);
+  }
+
+  const burstPerk = getPerkCount("burst_chain");
+  if (burstPerk > 0 && drawOutcome.hitCount >= 2) {
+    const burstBonus = Math.floor((drawOutcome.hitCount - 1) * 140 * burstPerk);
+    state.score += burstBonus;
+    pushLog(`バースト連鎖ボーナス +${burstBonus}`);
+  }
+
+  const comboPerk = getPerkCount("combo_drive");
+  if (comboPerk > 0 && state.comboStreak >= 2 && drawOutcome.hitCount > 0) {
+    const comboBonus = Math.floor((40 + drawOutcome.hitCount * 25) * state.comboStreak * comboPerk);
+    state.score += comboBonus;
+    pushLog(`コンボドライブ ${state.comboStreak}連続: +${comboBonus}`);
+  }
 }
 
 function openCellByRoll(roll) {
@@ -255,7 +412,17 @@ function openCellByRoll(roll) {
 
   const hitScore = calcHitScore(cell.number);
   state.score += hitScore;
-  pushLog(`出目 ${formatNumber(roll)}：${formatNumber(cell.number)} が開いた (+${hitScore})`);
+
+  const hitTurnGain = calcHitTurnGain();
+  state.turnsLeft += hitTurnGain;
+  pushLog(`出目 ${formatNumber(roll)}：${formatNumber(cell.number)} が開いた (+${hitScore}, 回数+${hitTurnGain})`);
+
+  const sevenPerk = getPerkCount("seven_fever");
+  if (sevenPerk > 0 && Math.abs(roll) % 7 === 0) {
+    const sevenBonus = Math.floor((100 + Math.abs(roll) * 2) * sevenPerk);
+    state.score += sevenBonus;
+    pushLog(`セブンフィーバー発動 (+${sevenBonus})`);
+  }
 
   const newLineIndexes = findNewCompletedLineIndexes();
   if (newLineIndexes.length > 0) {
@@ -268,7 +435,7 @@ function openCellByRoll(roll) {
     const bingoScore = calcBingoScore(lineCount, roll, state.boardSize);
     state.score += bingoScore;
 
-    const turnGain = lineCount * CONFIG.turnBonusPerLine;
+    const turnGain = lineCount * calcTurnGainPerBingoLine();
     state.turnsLeft += turnGain;
 
     pushLog(`ビンゴ ${lineCount}列成立！ (+${bingoScore}, 回数+${turnGain})`);
@@ -380,6 +547,18 @@ function applyPerk(perkId) {
           pushLog(`拡張マス ${converted} 個が負数マスに変化`);
         }
       }
+      break;
+    case "multi_roll":
+      pushLog(`抽選数/回が ${getRollsPerDraw()} になりました`);
+      break;
+    case "hit_turn_boost":
+      pushLog(`穴あき時の回数ボーナスが +${calcHitTurnGain()} になりました`);
+      break;
+    case "guided_aim":
+      pushLog(`狙い撃ち確率が上昇しました`);
+      break;
+    case "miss_refund":
+      pushLog(`全ハズレ時の払い戻しが +${getPerkCount("miss_refund")} になりました`);
       break;
     default:
       break;
@@ -531,7 +710,7 @@ function createRandomUniqueNumber(usedNumbers, expandedCell) {
   const min = expandedCell && isNegativeUnlocked() ? state.numberRange.min : 1;
   const max = state.numberRange.max;
 
-  for (let attempt = 0; attempt < 700; attempt += 1) {
+  for (let attempt = 0; attempt < 900; attempt += 1) {
     const candidate = randomIntExcludingZero(min, max);
     if (!usedNumbers.has(candidate)) {
       return candidate;
@@ -559,6 +738,7 @@ function drawRandomCandidate() {
 function renderBoard() {
   elements.board.innerHTML = "";
   elements.board.style.gridTemplateColumns = `repeat(${state.boardSize}, minmax(0, 1fr))`;
+  elements.board.style.setProperty("--cell-font-size", getCellFontSize(state.boardSize));
 
   state.board.forEach((cell) => {
     const node = document.createElement("div");
@@ -583,9 +763,10 @@ function renderStatus() {
   elements.turns.textContent = String(state.turnsLeft);
   elements.score.textContent = state.score.toLocaleString("ja-JP");
   elements.rank.textContent = getRank(state.score);
-  elements.roll.textContent = state.lastRoll === null ? "-" : formatNumber(state.lastRoll);
+  elements.roll.textContent = state.lastRolls.length === 0 ? "-" : state.lastRolls.map((value) => formatNumber(value)).join(", ");
   elements.boardSize.textContent = `${state.boardSize}x${state.boardSize}`;
   elements.drawRange.textContent = formatRange();
+  elements.rollsPerDraw.textContent = String(getRollsPerDraw());
 }
 
 function renderPerkList() {
@@ -642,6 +823,7 @@ function endGame(reason) {
     `ビンゴ列: ${state.bingoLines}`,
     `終了条件: ${endText}`,
     `盤面: ${state.boardSize}x${state.boardSize}`,
+    `抽選数/回: ${getRollsPerDraw()}`,
     "#ローグライクビンゴ",
   ].join("\n");
 
@@ -650,14 +832,39 @@ function endGame(reason) {
 }
 
 function calcHitScore(cellNumber) {
-  return Math.max(22, Math.floor(Math.abs(cellNumber) * 1.8));
+  let score = Math.max(22, Math.floor(Math.abs(cellNumber) * 1.8));
+  const hitBoost = getPerkCount("hit_score_boost");
+  if (hitBoost > 0) {
+    score = Math.floor(score * (1 + 0.32 * hitBoost));
+  }
+  return score;
 }
 
 function calcBingoScore(newLineCount, roll, boardSize) {
   const sizeScale = 1 + (boardSize - CONFIG.initialBoardSize) * 0.12;
   const base = 250 + Math.floor(Math.abs(roll) * 10);
   const combo = newLineCount * newLineCount * 70;
-  return Math.floor((newLineCount * base + combo) * sizeScale);
+
+  let score = Math.floor((newLineCount * base + combo) * sizeScale);
+  const bingoBoost = getPerkCount("bingo_score_boost");
+  if (bingoBoost > 0) {
+    score = Math.floor(score * (1 + 0.3 * bingoBoost));
+  }
+
+  return score;
+}
+
+function calcHitTurnGain() {
+  return CONFIG.turnBonusPerHit + getPerkCount("hit_turn_boost");
+}
+
+function calcTurnGainPerBingoLine() {
+  return CONFIG.turnBonusPerLine;
+}
+
+function getRollsPerDraw() {
+  const multi = getPerkCount("multi_roll");
+  return clamp(1 + multi, 1, CONFIG.maxRollsPerDraw);
 }
 
 function getRank(score) {
@@ -785,6 +992,19 @@ function isPerfectNumber(n) {
 
 function isExpandedCell(row, col) {
   return row >= CONFIG.initialBoardSize || col >= CONFIG.initialBoardSize;
+}
+
+function getCellFontSize(boardSize) {
+  if (boardSize >= 11) {
+    return "0.57rem";
+  }
+  if (boardSize >= 9) {
+    return "0.66rem";
+  }
+  if (boardSize >= 7) {
+    return "0.78rem";
+  }
+  return "0.95rem";
 }
 
 function formatNumber(value) {

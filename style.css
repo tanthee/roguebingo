@@ -114,6 +114,8 @@ h1 {
 
 .status-card strong {
   font-size: 1.25rem;
+  line-height: 1.15;
+  word-break: break-word;
 }
 
 .game-panel {
@@ -125,6 +127,7 @@ h1 {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
+  --cell-font-size: 0.95rem;
 }
 
 .cell {
@@ -137,7 +140,7 @@ h1 {
   display: grid;
   place-items: center;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: var(--cell-font-size);
   transition: transform 0.25s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -368,6 +371,6 @@ button,
   }
 
   .status-panel {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
